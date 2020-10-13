@@ -56,6 +56,11 @@
     <CudaCompile>
       <TargetMachinePlatform>64</TargetMachinePlatform>
       <GenerateRelocatableDeviceCode>true</GenerateRelocatableDeviceCode>
+      <InterleaveSourceInPTX>true</InterleaveSourceInPTX>
+      <PtxAsOptionV>true</PtxAsOptionV>
+      <Keep>true</Keep>
+      <GenerateLineInfo>true</GenerateLineInfo>
+      <GPUDebugInfo>false</GPUDebugInfo>
     </CudaCompile>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
@@ -76,6 +81,11 @@
     <CudaCompile>
       <TargetMachinePlatform>64</TargetMachinePlatform>
       <GenerateRelocatableDeviceCode>true</GenerateRelocatableDeviceCode>
+      <InterleaveSourceInPTX>true</InterleaveSourceInPTX>
+      <GPUDebugInfo>false</GPUDebugInfo>
+      <PtxAsOptionV>true</PtxAsOptionV>
+      <Keep>true</Keep>
+      <GenerateLineInfo>true</GenerateLineInfo>
     </CudaCompile>
   </ItemDefinitionGroup>
   <ItemGroup>
@@ -86,6 +96,9 @@
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="Common.cpp" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="x64\Release\JoinToCartesianKernel.ptx" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

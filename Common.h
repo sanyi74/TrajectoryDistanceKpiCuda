@@ -41,7 +41,7 @@ struct TrajectoryTable {
 };
 
 template<unsigned int TRAJCTORY_POINTS> struct JointPoints {
-	float jointPoint[TRAJCTORY_POINTS][8]; // 6x joint pose + DH index + Pose index
+	float jointPoint[TRAJCTORY_POINTS][7]; // 6x joint pose + [6] DH index * MAX_POSE + Pose index
 };
 
 template<unsigned int TRAJCTORY_POINTS> struct CartesianPoints {
