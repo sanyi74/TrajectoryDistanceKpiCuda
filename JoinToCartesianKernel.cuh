@@ -12,7 +12,7 @@ __device__ __host__ float reciprocalSqrt(float number) {
 	float xhalf = 0.5f * number;
 	int i = *(int*)&number;
 	i = 0x5f3759df - (i >> 1);
-	number = *(float*)&i;  
+	number = *(float*)&i;
 	number = number * (1.5f - (xhalf * number * number));
 	return number;
 #endif
@@ -23,6 +23,14 @@ __device__ __host__ unsigned int FloatToUint(float a) {
 	return __float2uint_rn(a);
 #else
 	return (unsigned int)roundf(a);
+#endif
+}
+
+__device__ __host__ void SinCos(float x, float* sptr, float* cptr) {
+#if defined(__CUDA_ARCH__)
+	__sincosf(x, sptr, cptr);
+#else
+	sincos(x, sptr, cptr);
 #endif
 }
 
@@ -37,17 +45,18 @@ template<unsigned int SIZE> __device__ __host__ void jointToCartesian(unsigned i
 	float d4 = dhParameters->dh[dhIndex].d4;
 	float d5 = dhParameters->dh[dhIndex].d5;
 	float d6 = dhParameters->dh[dhIndex].d6;
-	
+
 	float j1, j2, s0, s1, s2, s4, s5, s123, c0, c1, c2, c4, c5, c123, SIN_Z_ROTATION, COS_Z_ROTATION;
 	j1 = jointPoints->jointPoint[index][1];
 	j2 = jointPoints->jointPoint[index][2];
-	sincos(jointPoints->jointPoint[index][0], &s0, &c0);
-	sincos(j1, &s1, &c1);
-	sincos(j2, &s2, &c2);
-	sincos(jointPoints->jointPoint[index][4], &s4, &c4);
-	sincos(jointPoints->jointPoint[index][5], &s5, &c5);
-	sincos(j1 + j2 + jointPoints->jointPoint[index][3], &s123, &c123);
-	sincos(dhParameters->dh[dhIndex].rotZ, &SIN_Z_ROTATION, &COS_Z_ROTATION);
+
+	SinCos(jointPoints->jointPoint[index][0], &s0, &c0);
+	SinCos(j1, &s1, &c1);
+	SinCos(j2, &s2, &c2);
+	SinCos(jointPoints->jointPoint[index][4], &s4, &c4);
+	SinCos(jointPoints->jointPoint[index][5], &s5, &c5);
+	SinCos(j1 + j2 + jointPoints->jointPoint[index][3], &s123, &c123);
+	SinCos(dhParameters->dh[dhIndex].rotZ, &SIN_Z_ROTATION, &COS_Z_ROTATION);
 
 	float A1 = c0 * c123 + s0 * s123;
 	float A2 = c0 * c123 - s0 * s123;
@@ -208,9 +217,9 @@ template<unsigned int SIZE> void evaluateJointToCartesian(unsigned int nSample) 
 		start = std::chrono::system_clock::now();
 		{ // GPU
 			cudaMemcpy(dev_JointPoints, host_JointPoints, sizeof(JointPoints<SIZE>), cudaMemcpyHostToDevice);
-			unsigned int nBlocks = SIZE / 64;
-			if (SIZE % 64 != 0) nBlocks++;
-			jointToCartesianKernel << <nBlocks, 64 >> > (SIZE, dev_DhParameters, dev_Poses, dev_JointPoints, dev_CartesianPoints);
+			unsigned int nBlocks = SIZE / 128;
+			if (SIZE % 128 != 0) nBlocks++;
+			jointToCartesianKernel << <nBlocks, 128 >> > (SIZE, dev_DhParameters, dev_Poses, dev_JointPoints, dev_CartesianPoints);
 			cudaMemcpy(host_CartesianPoints, dev_CartesianPoints, sizeof(CartesianPoints<SIZE>), cudaMemcpyDeviceToHost);
 		}
 		gpuTime += std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::system_clock::now() - start).count();
@@ -251,7 +260,7 @@ int main() {
 		return -1;
 	}
 
-	unsigned int nSamples = 16;	
+	unsigned int nSamples = 4;
 	evaluateJointToCartesian<64 * 1024 * 1024>(nSamples);
 	evaluateJointToCartesian<32 * 1024 * 1024>(nSamples);
 	evaluateJointToCartesian<16 * 1024 * 1024>(nSamples);
