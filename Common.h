@@ -11,45 +11,38 @@
 #include <iostream>
 #include <thread>
 
-#define MAX_DH 128
-#define MAX_POSE 128
-#define MAX_TRAJECTORY 16384
-
-struct DhParameters {
-	struct DhParameter {
-		float d1;
-		float a2;
-		float a3;
-		float d4;
-		float d5;
-		float d6;
-		float rotZ;
-		uint32_t id;
-	} dh[MAX_DH];
+struct DhParameter {
+	float d1;
+	float a2;
+	float a3;
+	float d4;
+	float d5;
+	float d6;
+	float rotZ;
+	uint32_t id;
 };
 
-struct Poses {
-	struct Pose {
+struct Pose {
 		float xyz[3];
 		float quaternion[4];
-		uint32_t id;
-	} pose[MAX_POSE];
 };
 
-struct TrajectoryTable {
-	uint32_t trajectoryStartEnd[MAX_TRAJECTORY][2];
+struct TrajectoryEntry {
+	uint32_t trajectoryStartEnd[2];
 };
 
-template<unsigned int TRAJCTORY_POINTS> struct JointPoints {
-	float jointPoint[TRAJCTORY_POINTS][7]; // 6x joint pose + [6] DH index * MAX_POSE + Pose index
+struct JointPoint {
+	float q[6];
+	uint16_t dhIndex;
+	uint16_t poseIndex;
 };
 
-template<unsigned int TRAJCTORY_POINTS> struct CartesianPoints {
-	float xyzQuaternionPoint[TRAJCTORY_POINTS][7];
+struct CartesianPoint {
+	float xyz[3];
+	float quaternion[4];
 };
 
-template<unsigned int TRAJCTORY_POINTS> struct CartesianKpiPoints {
-	struct Kpi {
+struct CartesianKpiPoint {
 		float length;  // sum
 		float lengthOrientation; // sum
 		float distance;  // min,max,avg,rsd
@@ -62,11 +55,9 @@ template<unsigned int TRAJCTORY_POINTS> struct CartesianKpiPoints {
 		float distanceLocalPathOrientation;
 		int32_t distanceLocalPathTime;
 		int32_t distanceLocalPathOrientationTime;
-	}kpi[TRAJCTORY_POINTS];
 };
 
-struct TrajectoryKPIs {
-	struct Kpi {
+struct TrajectoryKPI {
 		// min,max,avg,rsd,argmin
 		float length;
 		float lengthOrientation;
@@ -80,7 +71,6 @@ struct TrajectoryKPIs {
 		float distanceLocalPathOrientation[4];
 		float distanceLocalPathTime[5];
 		float distanceLocalPathOrientationTime[5];
-	}kpi[MAX_TRAJECTORY];
 };
 
-void setUr5DhParameter(unsigned int index, DhParameters* dhParameters);
+void setUr5DhParameter(unsigned int index, DhParameter* dhParameters);

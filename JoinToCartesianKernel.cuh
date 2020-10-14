@@ -18,14 +18,6 @@ __device__ __host__ float reciprocalSqrt(float number) {
 #endif
 }
 
-__device__ __host__ unsigned int FloatToUint(float a) {
-#if defined(__CUDA_ARCH__)
-	return __float2uint_rn(a);
-#else
-	return (unsigned int)roundf(a);
-#endif
-}
-
 __device__ __host__ void SinCos(float x, float* sptr, float* cptr) {
 #if defined(__CUDA_ARCH__)
 	__sincosf(x, sptr, cptr);
@@ -34,29 +26,29 @@ __device__ __host__ void SinCos(float x, float* sptr, float* cptr) {
 #endif
 }
 
-template<unsigned int SIZE> __device__ __host__ void jointToCartesian(unsigned int index, DhParameters* dhParameters, Poses* poses, JointPoints<SIZE>* jointPoints, CartesianPoints<SIZE>* cartesianPoints) {
+__device__ __host__ void jointToCartesian(unsigned int index, DhParameter* dhParameters, Pose* poses, JointPoint* jointPoints, CartesianPoint* cartesianPoints) {
 
-	unsigned int dhIndex = FloatToUint(jointPoints->jointPoint[index][6]) % MAX_POSE;
-	unsigned int poseIndex = FloatToUint(jointPoints->jointPoint[index][6]) / MAX_POSE;
+	unsigned int dhIndex = jointPoints[index].dhIndex;
+	unsigned int poseIndex = jointPoints[index].poseIndex;
 
-	float d1 = dhParameters->dh[dhIndex].d1;
-	float a2 = dhParameters->dh[dhIndex].a2;
-	float a3 = dhParameters->dh[dhIndex].a3;
-	float d4 = dhParameters->dh[dhIndex].d4;
-	float d5 = dhParameters->dh[dhIndex].d5;
-	float d6 = dhParameters->dh[dhIndex].d6;
+	float d1 = dhParameters[dhIndex].d1;
+	float a2 = dhParameters[dhIndex].a2;
+	float a3 = dhParameters[dhIndex].a3;
+	float d4 = dhParameters[dhIndex].d4;
+	float d5 = dhParameters[dhIndex].d5;
+	float d6 = dhParameters[dhIndex].d6;
 
 	float j1, j2, s0, s1, s2, s4, s5, s123, c0, c1, c2, c4, c5, c123, SIN_Z_ROTATION, COS_Z_ROTATION;
-	j1 = jointPoints->jointPoint[index][1];
-	j2 = jointPoints->jointPoint[index][2];
+	j1 = jointPoints[index].q[1];
+	j2 = jointPoints[index].q[2];
 
-	SinCos(jointPoints->jointPoint[index][0], &s0, &c0);
+	SinCos(jointPoints[index].q[0], &s0, &c0);
 	SinCos(j1, &s1, &c1);
 	SinCos(j2, &s2, &c2);
-	SinCos(jointPoints->jointPoint[index][4], &s4, &c4);
-	SinCos(jointPoints->jointPoint[index][5], &s5, &c5);
-	SinCos(j1 + j2 + jointPoints->jointPoint[index][3], &s123, &c123);
-	SinCos(dhParameters->dh[dhIndex].rotZ, &SIN_Z_ROTATION, &COS_Z_ROTATION);
+	SinCos(jointPoints[index].q[4], &s4, &c4);
+	SinCos(jointPoints[index].q[5], &s5, &c5);
+	SinCos(j1 + j2 + jointPoints[index].q[3], &s123, &c123);
+	SinCos(dhParameters[dhIndex].rotZ, &SIN_Z_ROTATION, &COS_Z_ROTATION);
 
 	float A1 = c0 * c123 + s0 * s123;
 	float A2 = c0 * c123 - s0 * s123;
@@ -124,14 +116,14 @@ template<unsigned int SIZE> __device__ __host__ void jointToCartesian(unsigned i
 		quaternion[1] = (T[4 + 2] + T[2 * 4 + 1]) * s;
 	}
 
-	cartesianPoints->xyzQuaternionPoint[index][0] = T[3] + poses->pose[poseIndex].xyz[0];
-	cartesianPoints->xyzQuaternionPoint[index][1] = T[7] + poses->pose[poseIndex].xyz[1];
-	cartesianPoints->xyzQuaternionPoint[index][2] = T[11] + poses->pose[poseIndex].xyz[2];
+	cartesianPoints[index].xyz[0] = T[3] + poses[poseIndex].xyz[0];
+	cartesianPoints[index].xyz[1] = T[7] + poses[poseIndex].xyz[1];
+	cartesianPoints[index].xyz[2] = T[11] + poses[poseIndex].xyz[2];
 
-	T[0] = poses->pose[poseIndex].quaternion[0];
-	T[1] = poses->pose[poseIndex].quaternion[1];
-	T[2] = poses->pose[poseIndex].quaternion[2];
-	T[3] = poses->pose[poseIndex].quaternion[3];
+	T[0] = poses[poseIndex].quaternion[0];
+	T[1] = poses[poseIndex].quaternion[1];
+	T[2] = poses[poseIndex].quaternion[2];
+	T[3] = poses[poseIndex].quaternion[3];
 
 	T[4] = quaternion[0] * T[3] + quaternion[1] * T[2] - quaternion[2] * T[1] + quaternion[3] * T[0];
 	T[5] = -quaternion[0] * T[2] + quaternion[1] * T[3] + quaternion[2] * T[0] + quaternion[3] * T[1];
@@ -145,45 +137,45 @@ template<unsigned int SIZE> __device__ __host__ void jointToCartesian(unsigned i
 	T[6] /= T[8];
 	T[7] /= T[8];
 
-	cartesianPoints->xyzQuaternionPoint[index][3] = T[4];
-	cartesianPoints->xyzQuaternionPoint[index][4] = T[5];
-	cartesianPoints->xyzQuaternionPoint[index][5] = T[6];
-	cartesianPoints->xyzQuaternionPoint[index][6] = T[7];
+	cartesianPoints[index].quaternion[0] = T[4];
+	cartesianPoints[index].quaternion[1] = T[5];
+	cartesianPoints[index].quaternion[2] = T[6];
+	cartesianPoints[index].quaternion[3] = T[7];
 }
 
-template<unsigned int SIZE> __global__ void jointToCartesianKernel(unsigned int nElements, DhParameters* dhParameters, Poses* poses, JointPoints<SIZE>* jointPoints, CartesianPoints<SIZE>* cartesianPoints) {
+__global__ void jointToCartesianKernel(unsigned int nElements, DhParameter* dhParameters, Pose* poses, JointPoint* jointPoints, CartesianPoint* cartesianPoints) {
 	unsigned int index = blockIdx.x * blockDim.x + threadIdx.x;
 	if (index < nElements) jointToCartesian(index, dhParameters, poses, jointPoints, cartesianPoints);
 }
 
-template<unsigned int SIZE> void jointToCartesianCpu(unsigned int index, DhParameters* dhParameters, Poses* poses, JointPoints<SIZE>* jointPoints, CartesianPoints<SIZE>* cartesianPoints) {
+void jointToCartesianCpu(unsigned int index, DhParameter* dhParameters, Pose* poses, JointPoint* jointPoints, CartesianPoint* cartesianPoints) {
 	jointToCartesian(index, dhParameters, poses, jointPoints, cartesianPoints);
 }
 
-template<unsigned int SIZE> void evaluateJointToCartesian(unsigned int nSample) {
+void evaluateJointToCartesian(unsigned int nSample, unsigned int nPoints, unsigned int nKernel) {
 
-	JointPoints<SIZE>* host_JointPoints;
-	CartesianPoints<SIZE>* host_CartesianPoints;
-	cudaHostAlloc((void**)&host_JointPoints, sizeof(JointPoints<SIZE>), cudaHostAllocDefault);
-	cudaHostAlloc((void**)&host_CartesianPoints, sizeof(CartesianPoints<SIZE>), cudaHostAllocDefault);
+	JointPoint* host_JointPoints;
+	CartesianPoint* host_CartesianPoints;
+	cudaHostAlloc((void**)&host_JointPoints, nPoints * sizeof(JointPoint), cudaHostAllocDefault);
+	cudaHostAlloc((void**)&host_CartesianPoints, nPoints * sizeof(CartesianPoint), cudaHostAllocDefault);
 
-	DhParameters* dev_DhParameters;
-	Poses* dev_Poses;
-	JointPoints<SIZE>* dev_JointPoints;
-	CartesianPoints<SIZE>* dev_CartesianPoints;
-	cudaMalloc((void**)&dev_DhParameters, sizeof(DhParameters));
-	cudaMalloc((void**)&dev_Poses, sizeof(Poses));
-	cudaMalloc((void**)&dev_JointPoints, sizeof(JointPoints<SIZE>));
-	cudaMalloc((void**)&dev_CartesianPoints, sizeof(CartesianPoints<SIZE>));
+	DhParameter* dev_DhParameters;
+	Pose* dev_Poses;
+	JointPoint* dev_JointPoints;
+	CartesianPoint* dev_CartesianPoints;
+	cudaMalloc((void**)&dev_DhParameters, 16 * sizeof(DhParameter));
+	cudaMalloc((void**)&dev_Poses, 16 * sizeof(Pose));
+	cudaMalloc((void**)&dev_JointPoints, nPoints * sizeof(JointPoint));
+	cudaMalloc((void**)&dev_CartesianPoints, nPoints * sizeof(CartesianPoint));
 
-	DhParameters host_DhParameters;
-	Poses host_Poses;
-	setUr5DhParameter(0, &host_DhParameters);
-	host_Poses.pose[0].xyz[0] = host_Poses.pose[0].xyz[1] = host_Poses.pose[0].xyz[2] = 0;
-	host_Poses.pose[0].quaternion[0] = host_Poses.pose[0].quaternion[1] = host_Poses.pose[0].quaternion[2] = 0;
-	host_Poses.pose[0].quaternion[3] = 1.0;
-	cudaMemcpy(dev_DhParameters, &host_DhParameters, sizeof(DhParameters), cudaMemcpyHostToDevice);
-	cudaMemcpy(dev_Poses, &host_Poses, sizeof(Poses), cudaMemcpyHostToDevice);
+	DhParameter host_DhParameters[16];
+	Pose host_Poses[16];
+	setUr5DhParameter(0, host_DhParameters);
+	host_Poses[0].xyz[0] = host_Poses[0].xyz[1] = host_Poses[0].xyz[2] = 0;
+	host_Poses[0].quaternion[0] = host_Poses[0].quaternion[1] = host_Poses[0].quaternion[2] = 0;
+	host_Poses[0].quaternion[3] = 1.0;
+	cudaMemcpy(dev_DhParameters, host_DhParameters, 16 * sizeof(DhParameter), cudaMemcpyHostToDevice);
+	cudaMemcpy(dev_Poses, host_Poses, 16 * sizeof(Pose), cudaMemcpyHostToDevice);
 
 	double cpuTime = 0;
 	double gpuTime = 0;
@@ -195,15 +187,15 @@ template<unsigned int SIZE> void evaluateJointToCartesian(unsigned int nSample) 
 			const unsigned int nThreads = 16;
 			std::thread* t[nThreads];
 			for (int i = 0; i < nThreads; i++) {
-				t[i] = new std::thread([iter, i, host_JointPoints, nThreads]() {
+				t[i] = new std::thread([iter, i, host_JointPoints, nThreads, nPoints]() {
 					uint32_t rseed = 2008 * (iter + 7) + 1974 * i;
 					rseed = rseed * 214013 + 2531011;
-					for (auto index = i * (SIZE / nThreads); index < (i + 1) * (SIZE / nThreads); index++) {
+					for (auto index = i * (nPoints / nThreads); index < (i + 1) * (nPoints / nThreads); index++) {
 						for (auto j = 0; j < 6; j++) {
-							host_JointPoints->jointPoint[index][j] = 2.0f * (float)M_PI * (float)rseed / (float)UINT_MAX - (float)M_PI;
+							host_JointPoints[index].q[j] = 2.0f * (float)M_PI * (float)rseed / (float)UINT_MAX - (float)M_PI;
 							rseed = rseed * 214013 + 2531011;
 						}
-						host_JointPoints->jointPoint[index][6] = 0;
+						host_JointPoints[index].dhIndex = host_JointPoints[index].poseIndex = 0;
 					}
 					});
 			}
@@ -216,11 +208,13 @@ template<unsigned int SIZE> void evaluateJointToCartesian(unsigned int nSample) 
 
 		start = std::chrono::system_clock::now();
 		{ // GPU
-			cudaMemcpy(dev_JointPoints, host_JointPoints, sizeof(JointPoints<SIZE>), cudaMemcpyHostToDevice);
-			unsigned int nBlocks = SIZE / 128;
-			if (SIZE % 128 != 0) nBlocks++;
-			jointToCartesianKernel << <nBlocks, 128 >> > (SIZE, dev_DhParameters, dev_Poses, dev_JointPoints, dev_CartesianPoints);
-			cudaMemcpy(host_CartesianPoints, dev_CartesianPoints, sizeof(CartesianPoints<SIZE>), cudaMemcpyDeviceToHost);
+			cudaMemcpy(dev_JointPoints, host_JointPoints, nPoints * sizeof(JointPoint), cudaMemcpyHostToDevice);
+			unsigned int nBlocks = nPoints / 128;
+			if (nPoints % 128 != 0) nBlocks++;
+			for (int i = 0; i < nKernel;i++) jointToCartesianKernel << <nBlocks, 128 >> > (nPoints, dev_DhParameters, dev_Poses, dev_JointPoints, dev_CartesianPoints);
+			cudaDeviceSynchronize();
+			cudaMemcpy(host_CartesianPoints, dev_CartesianPoints, nPoints * sizeof(CartesianPoint), cudaMemcpyDeviceToHost);
+			cudaDeviceSynchronize();
 		}
 		gpuTime += std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::system_clock::now() - start).count();
 
@@ -229,9 +223,9 @@ template<unsigned int SIZE> void evaluateJointToCartesian(unsigned int nSample) 
 			const unsigned int nThreads = 16;
 			std::thread* t[nThreads];
 			for (int i = 0; i < nThreads; i++) {
-				t[i] = new std::thread([i, &host_DhParameters, &host_Poses, &host_JointPoints, &host_CartesianPoints, nThreads]() {
-					for (auto index = i * (SIZE / nThreads); index < (i + 1) * (SIZE / nThreads); index++)
-						jointToCartesianCpu(index, &host_DhParameters, &host_Poses, host_JointPoints, host_CartesianPoints);
+				t[i] = new std::thread([i, &host_DhParameters, &host_Poses, &host_JointPoints, &host_CartesianPoints, nThreads, nPoints]() {
+					for (auto index = i * (nPoints / nThreads); index < (i + 1) * (nPoints / nThreads); index++)
+						jointToCartesianCpu(index, host_DhParameters, host_Poses, host_JointPoints, host_CartesianPoints);
 					});
 			}
 			for (int i = 0; i < nThreads; i++) {
@@ -245,7 +239,7 @@ template<unsigned int SIZE> void evaluateJointToCartesian(unsigned int nSample) 
 	gpuTime = gpuTime / 1000000.0 / nSample;
 
 	std::cout << "\r";
-	std::cout << SIZE << " " << cpuTime << " sec " << gpuTime << " sec " << (gpuTime * 1000000.0 / SIZE) << " us " << (cpuTime / gpuTime) << " " << sizeof(JointPoints<SIZE>) << " " << sizeof(CartesianPoints<SIZE>) << "    " << std::endl;
+	std::cout << nPoints << " " << nKernel << " " << cpuTime << " sec " << gpuTime << " sec " << (gpuTime * 1000000.0 / nPoints) << " us/point " << (nPoints * (sizeof(JointPoint) + sizeof(CartesianPoint))) << " byte        " << std::endl;
 
 	cudaFreeHost(host_JointPoints);
 	cudaFreeHost(host_CartesianPoints);
@@ -260,24 +254,15 @@ int main() {
 		return -1;
 	}
 
-	unsigned int nSamples = 4;
-	evaluateJointToCartesian<64 * 1024 * 1024>(nSamples);
-	evaluateJointToCartesian<32 * 1024 * 1024>(nSamples);
-	evaluateJointToCartesian<16 * 1024 * 1024>(nSamples);
-	evaluateJointToCartesian<8 * 1024 * 1024>(nSamples);
-	evaluateJointToCartesian<4 * 1024 * 1024>(nSamples);
-	evaluateJointToCartesian<2 * 1024 * 1024>(nSamples);
-	evaluateJointToCartesian<1024 * 1024>(nSamples);
-	evaluateJointToCartesian<512 * 1024>(nSamples);
-	evaluateJointToCartesian<256 * 1024>(nSamples);
-	evaluateJointToCartesian<128 * 1024>(nSamples);
-	evaluateJointToCartesian<64 * 1024>(nSamples);
-	evaluateJointToCartesian<32 * 1024>(nSamples);
-	evaluateJointToCartesian<16 * 1024>(nSamples);
-	evaluateJointToCartesian<8 * 1024>(nSamples);
-	evaluateJointToCartesian<4 * 1024>(nSamples);
-	evaluateJointToCartesian<2 * 1024>(nSamples);
-	evaluateJointToCartesian<1024>(nSamples);
+	unsigned int nSamples = 8;
+	for (double i = 64 * 1024 * 1024; i>= 1000; i /= 1.414213562373095) {
+		evaluateJointToCartesian(nSamples, i, 0);
+		for (int k = 1; k <= 256; k *= 2) {
+			evaluateJointToCartesian(nSamples, i, k);
+		}
+	}
 
+	while (true);
+	
 	return 1;
 }
