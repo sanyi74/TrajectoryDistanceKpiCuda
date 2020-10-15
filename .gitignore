@@ -338,3 +338,6 @@ ASALocalRun/
 
 # BeatPulse healthcheck temp database
 healthchecksdb
+/link.cod
+/JoinToCartesianKernel.cudafe1.cod
+/double.txt
